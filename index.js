@@ -92,44 +92,52 @@ function updateQuickReplies() {
     chatQuickReplies = [];
     globalQuickReplies = [];
     
-    // 获取聊天级别的快捷回复
+    // 用于跟踪已添加的标签，避免重复
+    const chatQrLabels = new Set();
+    
     try {
-        const chatSets = qrApi.listChatSets();
-        const chatQrLabels = new Set(); // 用于跟踪已添加的标签，避免重复
+        // 直接访问内部设置获取聊天级别的快捷回复
+        if (qrApi.settings.chatConfig && qrApi.settings.chatConfig.setList) {
+            // 遍历聊天配置的 setList
+            qrApi.settings.chatConfig.setList.forEach(setLink => {
+                // 只处理可见的 Set
+                if (setLink.isVisible && setLink.set && setLink.set.qrList) {
+                    setLink.set.qrList.forEach(qr => {
+                        if (!qr.isHidden) {
+                            chatQuickReplies.push({
+                                setName: setLink.set.name,
+                                label: qr.label,
+                                message: qr.message || '(无消息内容)'
+                            });
+                            chatQrLabels.add(qr.label);
+                        }
+                    });
+                }
+            });
+        }
         
-        chatSets.forEach(setName => {
-            const qrSet = qrApi.getSetByName(setName);
-            if (qrSet && qrSet.qrList) {
-                qrSet.qrList.forEach(qr => {
-                    if (!qr.isHidden) {
-                        chatQuickReplies.push({
-                            setName: setName,
-                            label: qr.label,
-                            message: qr.message
-                        });
-                        chatQrLabels.add(qr.label);
-                    }
-                });
-            }
-        });
+        // 直接访问内部设置获取全局快捷回复
+        if (qrApi.settings.config && qrApi.settings.config.setList) {
+            // 遍历全局配置的 setList
+            qrApi.settings.config.setList.forEach(setLink => {
+                // 只处理可见的 Set
+                if (setLink.isVisible && setLink.set && setLink.set.qrList) {
+                    setLink.set.qrList.forEach(qr => {
+                        // 只添加不在聊天级别中且未隐藏的快捷回复
+                        if (!qr.isHidden && !chatQrLabels.has(qr.label)) {
+                            globalQuickReplies.push({
+                                setName: setLink.set.name,
+                                label: qr.label,
+                                message: qr.message || '(无消息内容)'
+                            });
+                        }
+                    });
+                }
+            });
+        }
         
-        // 获取全局快捷回复（排除已经在聊天级别存在的）
-        const globalSets = qrApi.listGlobalSets();
-        globalSets.forEach(setName => {
-            const qrSet = qrApi.getSetByName(setName);
-            if (qrSet && qrSet.qrList) {
-                qrSet.qrList.forEach(qr => {
-                    // 只添加不在聊天级别中且未隐藏的快捷回复
-                    if (!qr.isHidden && !chatQrLabels.has(qr.label)) {
-                        globalQuickReplies.push({
-                            setName: setName,
-                            label: qr.label,
-                            message: qr.message
-                        });
-                    }
-                });
-            }
-        });
+        console.log('Chat QRs:', chatQuickReplies.length, 'Global QRs:', globalQuickReplies.length);
+        
     } catch (error) {
         console.error('Error fetching quick replies:', error);
     }
@@ -151,9 +159,8 @@ function renderQuickReplies() {
     
     // 渲染聊天快捷回复
     if (chatQuickReplies.length > 0) {
-        // 限制显示最多10个
-        const displayItems = chatQuickReplies.slice(0, 10);
-        displayItems.forEach(qr => {
+        // 限制显示最多10个，超出可以滚动
+        chatQuickReplies.forEach(qr => {
             const item = document.createElement('div');
             item.className = 'quick-reply-item';
             item.innerText = qr.label;
@@ -169,9 +176,8 @@ function renderQuickReplies() {
     
     // 渲染全局快捷回复
     if (globalQuickReplies.length > 0) {
-        // 限制显示最多10个
-        const displayItems = globalQuickReplies.slice(0, 10);
-        displayItems.forEach(qr => {
+        // 不限制数量，容器设置了滚动
+        globalQuickReplies.forEach(qr => {
             const item = document.createElement('div');
             item.className = 'quick-reply-item';
             item.innerText = qr.label;
